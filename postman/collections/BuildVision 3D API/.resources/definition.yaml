@@ -1,0 +1,34 @@
+$kind: collection
+name: BuildVision 3D API
+description: Complete REST API collection for the BuildVision 3D structural engineering platform. Generated from Flask routes and controllers in app/routes and app/controllers.
+variables:
+  - key: baseUrl
+    value: 'http://localhost:5000'
+    description: Base URL of the Flask API server
+  - key: accessToken
+    value: ''
+    description: JWT access token - populated automatically by the Login request
+  - key: refreshToken
+    value: ''
+    description: JWT refresh token - populated automatically by the Login request
+  - key: userId
+    value: '1'
+    description: Target user ID for user-scoped requests
+  - key: projectId
+    value: '1'
+    description: Target project ID
+  - key: buildingId
+    value: '1'
+    description: Target building ID
+  - key: floorId
+    value: '1'
+    description: Target floor ID
+  - key: pillarId
+    value: '1'
+    description: Target pillar ID
+  - key: beamId
+    value: '1'
+    description: Target beam ID
+  - key: slabId
+    value: '1'
+    description: Target slab ID
