@@ -1,8 +1,36 @@
 import os
 from datetime import timedelta
+from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _build_database_uri():
+  """Resolve DB URL for local MySQL and Railway MySQL plugin vars."""
+  database_url = (
+    os.getenv("DATABASE_URL")
+    or os.getenv("MYSQL_URL")
+    or os.getenv("MYSQL_PRIVATE_URL")
+    or os.getenv("RAILWAY_DATABASE_URL")
+  )
+
+  if database_url:
+    if database_url.startswith("mysql://"):
+      database_url = database_url.replace("mysql://", "mysql+pymysql://", 1)
+    elif database_url.startswith("mariadb://"):
+      database_url = database_url.replace("mariadb://", "mysql+pymysql://", 1)
+    return database_url
+
+  db_host = os.getenv("MYSQLHOST") or os.getenv("DB_HOST", "localhost")
+  db_port = os.getenv("MYSQLPORT") or os.getenv("DB_PORT", "3306")
+  db_name = os.getenv("MYSQLDATABASE") or os.getenv("DB_NAME", "")
+  db_user = os.getenv("MYSQLUSER") or os.getenv("DB_USER", "root")
+  db_password = os.getenv("MYSQLPASSWORD") or os.getenv("DB_PASSWORD", "")
+
+  user = quote_plus(db_user)
+  password = quote_plus(db_password)
+  return f"mysql+pymysql://{user}:{password}@{db_host}:{db_port}/{db_name}"
 
 
 class Config:
@@ -11,21 +39,12 @@ class Config:
   JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
   JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
 
-  DB_HOST = os.getenv("DB_HOST", "localhost")
-  DB_PORT = os.getenv("DB_PORT", "3306")
-  DB_NAME = os.getenv("DB_NAME", "")
-  DB_USER = os.getenv("DB_USER", "root")
-  DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-
-  SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL") or os.getenv("RAILWAY_DATABASE_URL")
-  if SQLALCHEMY_DATABASE_URI and SQLALCHEMY_DATABASE_URI.startswith("mysql://"):
-    SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace("mysql://", "mysql+pymysql://", 1)
-  else:
-    SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI or (
-      f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    )
-
+  SQLALCHEMY_DATABASE_URI = _build_database_uri()
   SQLALCHEMY_TRACK_MODIFICATIONS = False
+  SQLALCHEMY_ENGINE_OPTIONS = {
+    "pool_pre_ping": True,
+    "pool_recycle": 280,
+  }
 
   DEBUG = os.getenv("FLASK_ENV", "development") == "development"
 
