@@ -17,9 +17,14 @@ class Config:
   DB_USER = os.getenv("DB_USER", "root")
   DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 
-  SQLALCHEMY_DATABASE_URI = (
-    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-  )
+  SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL") or os.getenv("RAILWAY_DATABASE_URL")
+  if SQLALCHEMY_DATABASE_URI and SQLALCHEMY_DATABASE_URI.startswith("mysql://"):
+    SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace("mysql://", "mysql+pymysql://", 1)
+  else:
+    SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI or (
+      f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
+
   SQLALCHEMY_TRACK_MODIFICATIONS = False
 
   DEBUG = os.getenv("FLASK_ENV", "development") == "development"
