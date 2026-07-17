@@ -1,24 +1,36 @@
+import logging
+import os
+
 from flask import Flask
 from app.config import config_by_name
 from app.extensions import db, migrate, jwt, cors
+
+logger = logging.getLogger(__name__)
 
 
 def initialize_database(app):
   with app.app_context():
     from app.models import user, project, building, floor, pillar, beam, slab  # noqa: F401
-    db.create_all()
+    try:
+      db.create_all()
+    except Exception as exc:
+      # Do not crash the whole process on transient DB startup races.
+      logger.exception("Database initialization failed: %s", exc)
 
 
-def create_app(config_name="development"):
+def create_app(config_name=None):
+  if config_name is None:
+    config_name = os.getenv("FLASK_ENV", "production")
+
   app = Flask(__name__)
-  app.config.from_object(config_by_name.get(config_name, config_by_name["development"]))
+  app.config.from_object(config_by_name.get(config_name, config_by_name["production"]))
 
   db.init_app(app)
   migrate.init_app(app, db)
   jwt.init_app(app)
   cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
 
-  from app.models import user, project, building, floor, pillar, beam, slab
+  from app.models import user, project, building, floor, pillar, beam, slab  # noqa: F401
 
   initialize_database(app)
 
