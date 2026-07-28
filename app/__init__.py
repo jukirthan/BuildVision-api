@@ -25,6 +25,12 @@ def create_app(config_name=None):
   app = Flask(__name__)
   app.config.from_object(config_by_name.get(config_name, config_by_name["production"]))
 
+  # Accept both "/api/projects" and "/api/projects/" without redirecting.
+  # A 3xx redirect here can cross origins (e.g. when proxied through the
+  # Next.js dev server) and strip the Authorization header on the hop,
+  # breaking authenticated POST/PUT requests such as "create project".
+  app.url_map.strict_slashes = False
+
   db.init_app(app)
   migrate.init_app(app, db)
   jwt.init_app(app)
@@ -43,6 +49,8 @@ def create_app(config_name=None):
   from app.routes.beam_routes import beam_bp
   from app.routes.slab_routes import slab_bp
   from app.routes.dashboard_routes import dashboard_bp
+  from app.routes.recommendation_routes import recommendation_bp
+  from app.routes.admin_routes import admin_bp
 
   app.register_blueprint(auth_bp, url_prefix="/api/auth")
   app.register_blueprint(user_bp, url_prefix="/api/users")
@@ -53,9 +61,16 @@ def create_app(config_name=None):
   app.register_blueprint(beam_bp, url_prefix="/api/beams")
   app.register_blueprint(slab_bp, url_prefix="/api/slabs")
   app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
+  app.register_blueprint(recommendation_bp, url_prefix="/api/recommendations")
+  app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
   @app.route("/api/health")
   def health_check():
-    return {"status": "ok", "service": "BuildVision 3D API"}, 200
+    from app.utils import success_response
+
+    return success_response(
+      {"status": "ok", "service": "BuildVision 3D API"},
+      "API healthy",
+    )
 
   return app

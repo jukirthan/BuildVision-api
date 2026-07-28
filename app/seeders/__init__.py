@@ -24,6 +24,66 @@ def seed_admin_user():
   return admin
 
 
+# A small cross-role team so the admin dashboard has real usage to report on
+# instead of a single account. Password is the same for every demo login.
+DEMO_TEAM = [
+  ("Priya Fernando", "priya@buildvision.com", "engineer"),
+  ("Dinesh Perera", "dinesh@buildvision.com", "architect"),
+  ("Nadia Silva", "nadia@buildvision.com", "engineer"),
+  ("Ravi Kumar", "ravi@buildvision.com", "contractor"),
+  ("Ayesha Jayasuriya", "ayesha@buildvision.com", "viewer"),
+]
+
+DEMO_MEMBER_PROJECTS = {
+  "priya@buildvision.com": [
+    ("Riverside Residences", "Colombo 07", "in_progress"),
+    ("Kandy Hillside Villas", "Kandy", "planning"),
+  ],
+  "dinesh@buildvision.com": [
+    ("Galle Face Retail Podium", "Colombo 03", "in_progress"),
+  ],
+  "nadia@buildvision.com": [
+    ("Negombo Warehouse Block", "Negombo", "planning"),
+  ],
+}
+
+
+def seed_team_members():
+  members = []
+  for name, email, role in DEMO_TEAM:
+    user = User.query.filter_by(email=email).first()
+    if not user:
+      user = User(name=name, email=email, role=role)
+      user.set_password("password123")
+      db.session.add(user)
+    members.append(user)
+  db.session.commit()
+  return members
+
+
+def seed_member_projects():
+  created = 0
+  for email, projects in DEMO_MEMBER_PROJECTS.items():
+    owner = User.query.filter_by(email=email).first()
+    if not owner:
+      continue
+    for name, location, status in projects:
+      if Project.query.filter_by(name=name).first():
+        continue
+      db.session.add(
+        Project(
+          name=name,
+          description=f"Demo project owned by {owner.name}.",
+          location=location,
+          status=status,
+          user_id=owner.id,
+        )
+      )
+      created += 1
+  db.session.commit()
+  return created
+
+
 def seed_sample_project(user):
   if Project.query.filter_by(name="Downtown Office Complex").first():
     return Project.query.filter_by(name="Downtown Office Complex").first()
@@ -162,9 +222,16 @@ def run_all_seeders():
   admin = seed_admin_user()
   print(f"  Admin user: {admin.email}")
 
+  print("Seeding team members...")
+  members = seed_team_members()
+  print(f"  Team members: {len(members)}")
+
   print("Seeding sample project...")
   project = seed_sample_project(admin)
   print(f"  Project: {project.name}")
+
+  print("Seeding member projects...")
+  print(f"  New member projects: {seed_member_projects()}")
 
   print("Seeding sample building...")
   building = seed_sample_building(project)

@@ -4,20 +4,24 @@ from app.models.floor import Floor
 from app.models.pillar import Pillar
 from app.models.beam import Beam
 from app.models.slab import Slab
-from app.middleware import get_current_user
+from app.access import get_building_for_user, get_floor_for_user, current_user_or_401
 from app.services.building_service import BuildingService
 from app.services.calculation_service import CalculationService
-from app.utils import success_response, error_response
+from app.utils import success_response
 
 
 class DashboardController:
   @staticmethod
   def project_summary():
-    current = get_current_user()
-    if not current:
-      return error_response("Unauthorized", 401)
+    current, err = current_user_or_401()
+    if err:
+      return err
 
-    projects = Project.query.filter_by(user_id=current.id).all()
+    if getattr(current, "role", None) == "admin":
+      projects = Project.query.all()
+    else:
+      projects = Project.query.filter_by(user_id=current.id).all()
+
     summary = []
     for project in projects:
       buildings = Building.query.filter_by(project_id=project.id).all()
@@ -37,29 +41,17 @@ class DashboardController:
 
   @staticmethod
   def building_statistics(building_id):
-    current = get_current_user()
-    building = Building.query.get(building_id)
-    if not building:
-      return error_response("Building not found", 404)
-
-    project = Project.query.get(building.project_id)
-    if project.user_id != current.id:
-      return error_response("Forbidden", 403)
-
+    _, _, err = get_building_for_user(building_id)
+    if err:
+      return err
     stats = BuildingService.get_building_statistics(building_id)
     return success_response(stats)
 
   @staticmethod
   def material_information(floor_id):
-    current = get_current_user()
-    floor = Floor.query.get(floor_id)
-    if not floor:
-      return error_response("Floor not found", 404)
-
-    building = Building.query.get(floor.building_id)
-    project = Project.query.get(building.project_id)
-    if project.user_id != current.id:
-      return error_response("Forbidden", 403)
+    _, floor, err = get_floor_for_user(floor_id)
+    if err:
+      return err
 
     materials = CalculationService.estimate_materials(floor_id)
     return success_response({

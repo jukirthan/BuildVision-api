@@ -1,10 +1,7 @@
 from flask import request
 from app.extensions import db
 from app.models.slab import Slab
-from app.models.floor import Floor
-from app.models.building import Building
-from app.models.project import Project
-from app.middleware import get_current_user
+from app.access import get_floor_for_user
 from app.services.calculation_service import CalculationService
 from app.utils import success_response, error_response, validate_required_fields
 
@@ -12,22 +9,17 @@ from app.utils import success_response, error_response, validate_required_fields
 class SlabController:
   @staticmethod
   def _check_floor_access(floor_id):
-    current = get_current_user()
-    floor = Floor.query.get(floor_id)
-    if not floor:
-      return None, error_response("Floor not found", 404)
-    building = Building.query.get(floor.building_id)
-    project = Project.query.get(building.project_id)
-    if project.user_id != current.id:
-      return None, error_response("Forbidden", 403)
+    _, floor, err = get_floor_for_user(floor_id)
+    if err:
+      return None, err
     return floor, None
 
   @staticmethod
   def get_slabs(floor_id):
-    _, err = SlabController._check_floor_access(floor_id)
+    floor, err = SlabController._check_floor_access(floor_id)
     if err:
       return err
-    slabs = Slab.query.filter_by(floor_id=floor_id).all()
+    slabs = Slab.query.filter_by(floor_id=floor.id).all()
     return success_response([s.to_dict() for s in slabs])
 
   @staticmethod

@@ -23,6 +23,28 @@ def get_current_user():
   return User.query.get(int(user_id))
 
 
+def is_admin(user):
+  return bool(user) and getattr(user, "role", None) == "admin"
+
+
+def admin_required(fn):
+  """Verifies a valid token *and* that the caller is an administrator.
+
+  Used for tenant-wide endpoints (user directory, usage analytics) that
+  must never be readable by a regular engineer account.
+  """
+  @wraps(fn)
+  def wrapper(*args, **kwargs):
+    try:
+      verify_jwt_in_request()
+    except Exception:
+      return error_response("Unauthorized - invalid or missing token", 401)
+    if not is_admin(get_current_user()):
+      return error_response("Forbidden - administrator access required", 403)
+    return fn(*args, **kwargs)
+  return wrapper
+
+
 def log_request(fn):
   @wraps(fn)
   def wrapper(*args, **kwargs):

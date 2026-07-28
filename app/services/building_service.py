@@ -20,16 +20,36 @@ class BuildingService:
     if not project:
       return None, "Project not found"
 
+    total_floors = max(1, int(data.get("total_floors", 1) or 1))
+    width = float(data.get("width", 20.0) or 20.0)
+    length = float(data.get("length", 15.0) or 15.0)
+    floor_height = float(data.get("floor_height", 3.5) or 3.5)
+    height = float(data.get("height", total_floors * floor_height) or (total_floors * floor_height))
+
     building = Building(
       name=data["name"],
       building_type=data.get("building_type", "residential"),
-      total_floors=data.get("total_floors", 1),
-      width=data.get("width", 0.0),
-      length=data.get("length", 0.0),
-      height=data.get("height", 0.0),
+      total_floors=total_floors,
+      width=width,
+      length=length,
+      height=height,
       project_id=project_id,
     )
     db.session.add(building)
+    db.session.flush()
+
+    # Create floor rows so the building is usable immediately
+    for i in range(1, total_floors + 1):
+      db.session.add(
+        Floor(
+          name=f"Floor {i}",
+          floor_number=i,
+          height=floor_height,
+          area=width * length,
+          building_id=building.id,
+        )
+      )
+
     db.session.commit()
     return building, None
 
