@@ -8,8 +8,14 @@ ALLOWED_ROLES = {"admin", "engineer", "architect", "contractor"}
 
 
 def _issue_tokens(user):
-  access_token = create_access_token(identity=str(user.id))
-  refresh_token = create_refresh_token(identity=str(user.id))
+  # Embed role in the token so admin gates skip a remote user lookup.
+  claims = {"role": user.role or "engineer"}
+  access_token = create_access_token(
+    identity=str(user.id), additional_claims=claims
+  )
+  refresh_token = create_refresh_token(
+    identity=str(user.id), additional_claims=claims
+  )
   return {
     "user": user.to_dict(),
     "access_token": access_token,
