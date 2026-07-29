@@ -1,7 +1,8 @@
 from flask import request
+from sqlalchemy.orm import selectinload
 from app.extensions import db
 from app.models.project import Project
-from app.access import get_project_for_user, current_user_or_401
+from app.access import get_project_for_user, current_identity_or_401
 from app.services.building_service import BuildingService
 from app.utils import success_response, error_response, validate_required_fields
 
@@ -9,13 +10,19 @@ from app.utils import success_response, error_response, validate_required_fields
 class ProjectController:
   @staticmethod
   def get_projects():
-    current, err = current_user_or_401()
+    identity, err = current_identity_or_401()
     if err:
       return err
-    if getattr(current, "role", None) == "admin":
-      projects = Project.query.all()
+    # selectinload = 2 queries total (projects + buildings), not N+1 lazy joins
+    query = Project.query.options(selectinload(Project.buildings))
+    if identity["role"] == "admin":
+      projects = query.order_by(Project.created_at.desc()).all()
     else:
-      projects = Project.query.filter_by(user_id=current.id).all()
+      projects = (
+        query.filter_by(user_id=identity["id"])
+        .order_by(Project.created_at.desc())
+        .all()
+      )
     return success_response([p.to_dict(include_buildings=True) for p in projects])
 
   @staticmethod
@@ -23,11 +30,18 @@ class ProjectController:
     _, project, err = get_project_for_user(project_id)
     if err:
       return err
+    project = (
+      Project.query.options(selectinload(Project.buildings))
+      .filter_by(id=project_id)
+      .first()
+    )
+    if not project:
+      return error_response("Project not found", 404)
     return success_response(project.to_dict(include_buildings=True))
 
   @staticmethod
   def create_project():
-    current, err = current_user_or_401()
+    identity, err = current_identity_or_401()
     if err:
       return err
 
@@ -41,7 +55,7 @@ class ProjectController:
       description=data.get("description"),
       location=data.get("location"),
       status=data.get("status", "planning"),
-      user_id=current.id,
+      user_id=identity["id"],
     )
     db.session.add(project)
     db.session.commit()
