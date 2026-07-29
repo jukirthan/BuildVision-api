@@ -1,5 +1,7 @@
 """Shared project ownership / admin access helpers."""
 
+from flask_jwt_extended import get_jwt, get_jwt_identity
+
 from app.models.project import Project
 from app.models.building import Building
 from app.models.floor import Floor
@@ -14,28 +16,46 @@ def current_user_or_401():
   return user, None
 
 
+def current_identity_or_401():
+  """Caller id + role from the JWT — no remote user lookup."""
+  user_id = get_jwt_identity()
+  if not user_id:
+    return None, error_response("Unauthorized", 401)
+  claims = get_jwt() or {}
+  return {
+    "id": int(user_id),
+    "role": str(claims.get("role") or "engineer").lower(),
+  }, None
+
+
 def can_access_project(user, project):
   if not user or not project:
     return False
-  if getattr(user, "role", None) == "admin":
+  if isinstance(user, dict):
+    role = user.get("role")
+    user_id = user.get("id")
+  else:
+    role = getattr(user, "role", None)
+    user_id = getattr(user, "id", None)
+  if role == "admin":
     return True
-  return project.user_id == user.id
+  return project.user_id == user_id
 
 
 def get_project_for_user(project_id):
-  user, err = current_user_or_401()
+  identity, err = current_identity_or_401()
   if err:
     return None, None, err
   project = Project.query.get(project_id)
   if not project:
     return None, None, error_response("Project not found", 404)
-  if not can_access_project(user, project):
+  if not can_access_project(identity, project):
     return None, None, error_response("Forbidden", 403)
-  return user, project, None
+  return identity, project, None
 
 
 def get_building_for_user(building_id):
-  user, err = current_user_or_401()
+  identity, err = current_identity_or_401()
   if err:
     return None, None, err
   building = Building.query.get(building_id)
@@ -44,13 +64,13 @@ def get_building_for_user(building_id):
   project = Project.query.get(building.project_id)
   if not project:
     return None, None, error_response("Project not found", 404)
-  if not can_access_project(user, project):
+  if not can_access_project(identity, project):
     return None, None, error_response("Forbidden", 403)
-  return user, building, None
+  return identity, building, None
 
 
 def get_floor_for_user(floor_id):
-  user, err = current_user_or_401()
+  identity, err = current_identity_or_401()
   if err:
     return None, None, err
   floor = Floor.query.get(floor_id)
@@ -62,6 +82,6 @@ def get_floor_for_user(floor_id):
   project = Project.query.get(building.project_id)
   if not project:
     return None, None, error_response("Project not found", 404)
-  if not can_access_project(user, project):
+  if not can_access_project(identity, project):
     return None, None, error_response("Forbidden", 403)
-  return user, floor, None
+  return identity, floor, None
