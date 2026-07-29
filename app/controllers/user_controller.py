@@ -1,10 +1,11 @@
 from flask import request
-from sqlalchemy import func
+from sqlalchemy import func, text
 from app.extensions import db
 from app.models.user import User
 from app.models.project import Project
 from app.middleware import get_current_user, is_admin
 from app.utils import success_response, error_response, validate_required_fields
+from app.controllers.admin_controller import _invalidate_overview_cache
 
 # Kept in sync with ALLOWED_ROLES in auth_controller (plus "viewer", which is
 # assignable by an admin but not self-selectable at signup).
@@ -35,36 +36,43 @@ class UserController:
   def get_all_users():
     """Admin user directory with optional search / role filter.
 
-    Includes each user's project count so the admin table can show real
-    activity without an N+1 round trip per row.
+    One LEFT OUTER JOIN for project counts — no INNER JOIN that drops
+    inactive users, and no password_hash transferred over the wire.
     """
     search = (request.args.get("search") or "").strip().lower()
     role = (request.args.get("role") or "").strip().lower()
 
-    query = User.query
+    sql = """
+      SELECT
+        u.id, u.name, u.email, u.role, u.created_at, u.updated_at,
+        COUNT(p.id) AS project_count
+      FROM users u
+      LEFT JOIN projects p ON p.user_id = u.id
+      WHERE 1=1
+    """
+    params = {}
     if search:
-      like = f"%{search}%"
-      query = query.filter(
-        db.or_(func.lower(User.name).like(like), func.lower(User.email).like(like))
-      )
+      sql += " AND (LOWER(u.name) LIKE :search OR LOWER(u.email) LIKE :search)"
+      params["search"] = f"%{search}%"
     if role and role != "all":
-      query = query.filter(func.lower(User.role) == role)
+      sql += " AND LOWER(u.role) = :role"
+      params["role"] = role
+    sql += " GROUP BY u.id, u.name, u.email, u.role, u.created_at, u.updated_at"
+    sql += " ORDER BY u.id DESC"
 
-    users = query.order_by(User.id.desc()).all()
-
-    # One grouped query for all project counts.
-    counts = dict(
-      db.session.query(Project.user_id, func.count(Project.id))
-      .group_by(Project.user_id)
-      .all()
-    )
-
-    payload = []
-    for u in users:
-      row = u.to_dict()
-      row["project_count"] = int(counts.get(u.id, 0))
-      payload.append(row)
-
+    rows = db.session.execute(text(sql), params).mappings().all()
+    payload = [
+      {
+        "id": r["id"],
+        "name": r["name"],
+        "email": r["email"],
+        "role": r["role"],
+        "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+        "project_count": int(r["project_count"] or 0),
+      }
+      for r in rows
+    ]
     return success_response(payload)
 
   @staticmethod
@@ -88,6 +96,7 @@ class UserController:
     user.set_password(data["password"])
     db.session.add(user)
     db.session.commit()
+    _invalidate_overview_cache()
     return success_response(user.to_dict(), "User created", 201)
 
   @staticmethod
@@ -134,6 +143,7 @@ class UserController:
       user.set_password(data["password"])
 
     db.session.commit()
+    _invalidate_overview_cache()
     return success_response(user.to_dict(), "User updated")
 
   @staticmethod
@@ -156,4 +166,5 @@ class UserController:
 
     db.session.delete(user)
     db.session.commit()
+    _invalidate_overview_cache()
     return success_response(message="User deleted")
