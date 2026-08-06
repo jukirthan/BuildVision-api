@@ -33,6 +33,15 @@ def _build_database_uri():
   return f"mysql+pymysql://{user}:{password}@{db_host}:{db_port}/{db_name}"
 
 
+def _cors_origins():
+  raw = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000",
+  )
+  origins = [o.strip() for o in raw.split(",") if o.strip()]
+  return origins or ["http://localhost:3000"]
+
+
 class Config:
   SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
   JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-jwt-secret")
@@ -48,11 +57,19 @@ class Config:
     "max_overflow": 10,
   }
 
+  CORS_ORIGINS = _cors_origins()
   DEBUG = os.getenv("FLASK_ENV", "development") == "development"
 
 
 class DevelopmentConfig(Config):
   DEBUG = True
+
+
+class TestingConfig(Config):
+  DEBUG = True
+  TESTING = True
+  SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+  SQLALCHEMY_ENGINE_OPTIONS = {}
 
 
 class ProductionConfig(Config):
@@ -61,5 +78,6 @@ class ProductionConfig(Config):
 
 config_by_name = {
   "development": DevelopmentConfig,
+  "testing": TestingConfig,
   "production": ProductionConfig,
 }
