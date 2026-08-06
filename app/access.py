@@ -8,6 +8,10 @@ from app.models.floor import Floor
 from app.middleware import get_current_user
 from app.utils import error_response
 
+# Roles that may mutate structure data they own.
+MUTATING_ROLES = {"admin", "engineer", "architect", "contractor"}
+READ_ONLY_ROLES = {"viewer"}
+
 
 def current_user_or_401():
   user = get_current_user()
@@ -28,24 +32,54 @@ def current_identity_or_401():
   }, None
 
 
+def _role_of(user):
+  if isinstance(user, dict):
+    return str(user.get("role") or "").lower()
+  return str(getattr(user, "role", "") or "").lower()
+
+
+def _id_of(user):
+  if isinstance(user, dict):
+    return user.get("id")
+  return getattr(user, "id", None)
+
+
 def can_access_project(user, project):
   if not user or not project:
     return False
-  if isinstance(user, dict):
-    role = user.get("role")
-    user_id = user.get("id")
-  else:
-    role = getattr(user, "role", None)
-    user_id = getattr(user, "id", None)
+  role = _role_of(user)
+  user_id = _id_of(user)
   if role == "admin":
     return True
   return project.user_id == user_id
 
 
-def get_project_for_user(project_id):
+def can_mutate(user) -> bool:
+  """Viewers (and unknown roles) cannot create/update/delete."""
+  role = _role_of(user)
+  if role in READ_ONLY_ROLES:
+    return False
+  if role == "admin":
+    return True
+  return role in MUTATING_ROLES
+
+
+def require_mutate(identity):
+  if not can_mutate(identity):
+    return error_response(
+      "Forbidden - viewers have read-only access", 403
+    )
+  return None
+
+
+def get_project_for_user(project_id, *, write=False):
   identity, err = current_identity_or_401()
   if err:
     return None, None, err
+  if write:
+    denied = require_mutate(identity)
+    if denied:
+      return None, None, denied
   project = Project.query.get(project_id)
   if not project:
     return None, None, error_response("Project not found", 404)
@@ -54,10 +88,14 @@ def get_project_for_user(project_id):
   return identity, project, None
 
 
-def get_building_for_user(building_id):
+def get_building_for_user(building_id, *, write=False):
   identity, err = current_identity_or_401()
   if err:
     return None, None, err
+  if write:
+    denied = require_mutate(identity)
+    if denied:
+      return None, None, denied
   building = Building.query.get(building_id)
   if not building:
     return None, None, error_response("Building not found", 404)
@@ -69,10 +107,14 @@ def get_building_for_user(building_id):
   return identity, building, None
 
 
-def get_floor_for_user(floor_id):
+def get_floor_for_user(floor_id, *, write=False):
   identity, err = current_identity_or_401()
   if err:
     return None, None, err
+  if write:
+    denied = require_mutate(identity)
+    if denied:
+      return None, None, denied
   floor = Floor.query.get(floor_id)
   if not floor:
     return None, None, error_response("Floor not found", 404)
