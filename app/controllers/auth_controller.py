@@ -1,7 +1,13 @@
 from flask import request
-from flask_jwt_extended import create_access_token, create_refresh_token
+from flask_jwt_extended import (
+  create_access_token,
+  create_refresh_token,
+  get_jwt,
+  get_jwt_identity,
+)
 from app.extensions import db
 from app.models.user import User
+from app.security.passwords import validate_password_strength
 from app.utils import success_response, error_response, validate_required_fields
 
 ALLOWED_ROLES = {"admin", "engineer", "architect", "contractor"}
@@ -9,7 +15,7 @@ ALLOWED_ROLES = {"admin", "engineer", "architect", "contractor"}
 
 def _issue_tokens(user):
   # Embed role in the token so admin gates skip a remote user lookup.
-  claims = {"role": user.role or "engineer"}
+  claims = {"role": (user.role or "engineer").lower()}
   access_token = create_access_token(
     identity=str(user.id), additional_claims=claims
   )
@@ -41,8 +47,9 @@ class AuthController:
       return error_response("Name must be at least 2 characters", 400)
     if "@" not in email or "." not in email.split("@")[-1]:
       return error_response("Enter a valid email address", 400)
-    if len(password) < 6:
-      return error_response("Password must be at least 6 characters", 400)
+    strength_error = validate_password_strength(password)
+    if strength_error:
+      return error_response(strength_error, 400)
     if role not in ALLOWED_ROLES:
       return error_response(
         f"Invalid role. Use one of: {', '.join(sorted(ALLOWED_ROLES - {'admin'}))}",
@@ -82,3 +89,28 @@ class AuthController:
       return error_response("Invalid email or password", 401)
 
     return success_response(_issue_tokens(user), "Login successful")
+
+  @staticmethod
+  def refresh():
+    """Rotate access token while preserving role claims from the refresh JWT."""
+    user_id = get_jwt_identity()
+    claims = get_jwt() or {}
+    role = str(claims.get("role") or "engineer").lower()
+
+    # Prefer live role from DB when reachable so demotions take effect.
+    user = User.query.get(int(user_id)) if user_id else None
+    if user:
+      role = (user.role or role).lower()
+
+    access_token = create_access_token(
+      identity=str(user_id),
+      additional_claims={"role": role},
+    )
+    return success_response(
+      {
+        "access_token": access_token,
+        "token": access_token,
+        "role": role,
+      },
+      "Token refreshed",
+    )
