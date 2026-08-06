@@ -22,7 +22,7 @@ class BuildingController:
 
   @staticmethod
   def create_building(project_id):
-    _, _, err = get_project_for_user(project_id)
+    _, _, err = get_project_for_user(project_id, write=True)
     if err:
       return err
 
@@ -38,7 +38,7 @@ class BuildingController:
 
   @staticmethod
   def update_building(building_id):
-    _, building, err = get_building_for_user(building_id)
+    _, building, err = get_building_for_user(building_id, write=True)
     if err:
       return err
 
@@ -48,7 +48,7 @@ class BuildingController:
 
   @staticmethod
   def delete_building(building_id):
-    _, building, err = get_building_for_user(building_id)
+    _, building, err = get_building_for_user(building_id, write=True)
     if err:
       return err
 
