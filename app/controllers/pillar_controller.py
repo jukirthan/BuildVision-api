@@ -8,8 +8,8 @@ from app.utils import success_response, error_response, validate_required_fields
 
 class PillarController:
   @staticmethod
-  def _check_floor_access(floor_id):
-    _, floor, err = get_floor_for_user(floor_id)
+  def _check_floor_access(floor_id, *, write=False):
+    _, floor, err = get_floor_for_user(floor_id, write=write)
     if err:
       return None, err
     return floor, None
@@ -34,7 +34,7 @@ class PillarController:
 
   @staticmethod
   def create_pillar(floor_id):
-    floor, err = PillarController._check_floor_access(floor_id)
+    floor, err = PillarController._check_floor_access(floor_id, write=True)
     if err:
       return err
 
@@ -66,7 +66,7 @@ class PillarController:
     pillar = Pillar.query.get(pillar_id)
     if not pillar:
       return error_response("Pillar not found", 404)
-    _, err = PillarController._check_floor_access(pillar.floor_id)
+    _, err = PillarController._check_floor_access(pillar.floor_id, write=True)
     if err:
       return err
 
@@ -85,7 +85,7 @@ class PillarController:
     pillar = Pillar.query.get(pillar_id)
     if not pillar:
       return error_response("Pillar not found", 404)
-    _, err = PillarController._check_floor_access(pillar.floor_id)
+    _, err = PillarController._check_floor_access(pillar.floor_id, write=True)
     if err:
       return err
 
@@ -106,7 +106,7 @@ class PillarController:
     pillar = Pillar.query.get(pillar_id)
     if not pillar:
       return error_response("Pillar not found", 404)
-    _, err = PillarController._check_floor_access(pillar.floor_id)
+    _, err = PillarController._check_floor_access(pillar.floor_id, write=True)
     if err:
       return err
 
@@ -128,7 +128,7 @@ class PillarController:
     if not pillar:
       return error_response("Pillar not found", 404)
     floor_id = pillar.floor_id
-    _, err = PillarController._check_floor_access(floor_id)
+    _, err = PillarController._check_floor_access(floor_id, write=True)
     if err:
       return err
 
