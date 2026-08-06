@@ -21,3 +21,5 @@ SQLAlchemy==2.0.51
 typing_extensions==4.12.2
 Werkzeug==3.0.3
 gunicorn==24.1.1
+pytest==8.3.3
+pytest-cov==5.0.0
