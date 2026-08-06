@@ -6,6 +6,7 @@ from app.models.project import Project
 from app.middleware import get_current_user, is_admin
 from app.utils import success_response, error_response, validate_required_fields
 from app.controllers.admin_controller import _invalidate_overview_cache
+from app.ttl_cache import users_cache
 
 # Kept in sync with ALLOWED_ROLES in auth_controller (plus "viewer", which is
 # assignable by an admin but not self-selectable at signup).
@@ -41,6 +42,10 @@ class UserController:
     """
     search = (request.args.get("search") or "").strip().lower()
     role = (request.args.get("role") or "").strip().lower()
+    cache_key = f"users:{search}:{role or 'all'}"
+    cached = users_cache.get(cache_key)
+    if cached is not None:
+      return success_response(cached)
 
     sql = """
       SELECT
@@ -73,6 +78,7 @@ class UserController:
       }
       for r in rows
     ]
+    users_cache.set(cache_key, payload)
     return success_response(payload)
 
   @staticmethod
@@ -97,6 +103,7 @@ class UserController:
     db.session.add(user)
     db.session.commit()
     _invalidate_overview_cache()
+    users_cache.invalidate("users:")
     return success_response(user.to_dict(), "User created", 201)
 
   @staticmethod
@@ -144,6 +151,7 @@ class UserController:
 
     db.session.commit()
     _invalidate_overview_cache()
+    users_cache.invalidate("users:")
     return success_response(user.to_dict(), "User updated")
 
   @staticmethod
@@ -167,4 +175,5 @@ class UserController:
     db.session.delete(user)
     db.session.commit()
     _invalidate_overview_cache()
+    users_cache.invalidate("users:")
     return success_response(message="User deleted")
