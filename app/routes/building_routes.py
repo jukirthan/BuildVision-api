@@ -17,6 +17,18 @@ def get_building(building_id):
   return BuildingController.get_building(building_id)
 
 
+@building_bp.route("/<int:building_id>/design", methods=["GET"])
+@jwt_required_custom
+def get_building_design(building_id):
+  return BuildingController.get_design(building_id)
+
+
+@building_bp.route("/<int:building_id>/design", methods=["PUT"])
+@jwt_required_custom
+def put_building_design(building_id):
+  return BuildingController.put_design(building_id)
+
+
 @building_bp.route("/project/<int:project_id>", methods=["POST"])
 @jwt_required_custom
 def create_building(project_id):

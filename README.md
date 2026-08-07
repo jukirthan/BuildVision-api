@@ -70,6 +70,10 @@ flask db migrate -m "Initial Migration"
 flask db upgrade
 ```
 
+For an existing database created before planner persistence was added, apply
+`migrations/001_add_building_design_snapshot.sql` once before starting the new
+backend.
+
 ### 6. Seed database
 
 ```bash

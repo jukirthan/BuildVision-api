@@ -12,6 +12,8 @@ class Building(db.Model):
   width = db.Column(db.Float, default=0.0)
   length = db.Column(db.Float, default=0.0)
   height = db.Column(db.Float, default=0.0)
+  design_snapshot = db.Column(db.JSON, nullable=True)
+  design_version = db.Column(db.Integer, nullable=False, default=0)
   project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
   created_at = db.Column(db.DateTime, default=utc_now)
   updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
@@ -28,6 +30,7 @@ class Building(db.Model):
       "width": self.width,
       "length": self.length,
       "height": self.height,
+      "design_version": self.design_version or 0,
       "project_id": self.project_id,
       "created_at": self.created_at.isoformat() if self.created_at else None,
       "updated_at": self.updated_at.isoformat() if self.updated_at else None,
