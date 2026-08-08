@@ -97,6 +97,20 @@ Server: `http://127.0.0.1:5000`
 
 Health check: `GET /api/health`
 
+### Railway deployment
+
+Railway injects the `PORT` variable at runtime. The included `railway.json`
+binds Gunicorn to `0.0.0.0:$PORT` and configures `/api/health` as the deployment
+healthcheck. Generate a public Railway domain for the service, then verify:
+
+```text
+https://your-service.up.railway.app/api/health
+```
+
+Set `GEMINI_API_KEY`, `GEMINI_MODEL`, `AI_PROVIDER`, `SECRET_KEY`,
+`JWT_SECRET_KEY`, and the Railway MySQL variables in the Railway service
+environment. Never commit `.env` or provider keys.
+
 The authenticated AI Assistant uses the server-side OpenAI Responses API. Set
 `OPENAI_API_KEY` in Railway/AWS or the local backend environment; never put the
 key in a `NEXT_PUBLIC_*` variable or send it from the browser. `OPENAI_MODEL`
