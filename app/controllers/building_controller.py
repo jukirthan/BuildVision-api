@@ -1,8 +1,11 @@
 from flask import request
 from app.access import get_project_for_user, get_building_for_user
 from app.services.building_service import BuildingService
+from app.services.structure_sync_service import StructureSyncService, StructureValidationError
+from app.services.pynite_service import PyniteModelBuilder
 from app.utils import success_response, error_response, validate_required_fields
 from app.extensions import db
+from sqlalchemy.exc import SQLAlchemyError
 
 
 class BuildingController:
@@ -38,6 +41,44 @@ class BuildingController:
       "snapshot": building.design_snapshot,
       "version": building.design_version,
     }, "Design saved")
+
+  @staticmethod
+  def get_structure(building_id):
+    _, building, err = get_building_for_user(building_id)
+    if err:
+      return err
+    return success_response(StructureSyncService.load(building))
+
+  @staticmethod
+  def put_structure(building_id):
+    _, building, err = get_building_for_user(building_id, write=True)
+    if err:
+      return err
+    data = request.get_json(silent=True) or {}
+    payload = data.get("structure", data)
+    version = data.get("version", payload.get("version") if isinstance(payload, dict) else None)
+    if not isinstance(version, int):
+      return error_response("version must be an integer", 400)
+    try:
+      result = StructureSyncService.save(building, payload, version)
+      db.session.commit()
+      return success_response(result, "Structure synchronized")
+    except StructureValidationError as exc:
+      db.session.rollback()
+      status = 409 if "changed on the server" in str(exc) else 400
+      return error_response(str(exc), status, errors=exc.errors)
+    except SQLAlchemyError:
+      db.session.rollback()
+      return error_response("Structure could not be saved", 500)
+
+  @staticmethod
+  def analyze_structure(building_id):
+    _, building, err = get_building_for_user(building_id)
+    if err:
+      return err
+    data = request.get_json(silent=True) or {}
+    result = PyniteModelBuilder.build(building, run_analysis=data.get("runAnalysis", True))
+    return success_response(result, "Engineering analysis complete" if result["analyzed"] else "Engineering model built")
 
   @staticmethod
   def get_buildings(project_id):
