@@ -11,6 +11,4 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . ./
 
-EXPOSE 8000
-
-CMD ["sh", "-c", "gunicorn run:app --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120"]
+CMD ["sh", "-c", "exec gunicorn run:app --bind 0.0.0.0:${PORT:?PORT must be set by Railway} --workers 2 --timeout 120"]
