@@ -10,5 +10,6 @@ COPY requirements.txt ./
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . ./
+RUN chmod +x /app/start.sh
 
-CMD ["sh", "-c", "exec gunicorn run:app --bind 0.0.0.0:${PORT:?PORT must be set by Railway} --workers 2 --timeout 120"]
+CMD ["/app/start.sh"]
