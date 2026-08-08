@@ -1,22 +1,142 @@
+import errno
 import logging
 import os
+import time
 
 from flask import Flask
+from sqlalchemy.exc import OperationalError
 from app.config import config_by_name
 from app.extensions import db, migrate, jwt, cors
 from app.http import register_error_handlers, register_security_headers
 
 logger = logging.getLogger(__name__)
 
+# Path to a file-based lock used to serialize schema creation across
+# concurrently starting instances/replicas on the same host/container.
+_DB_INIT_LOCK_PATH = os.getenv("DB_INIT_LOCK_PATH", "/tmp/buildvision_db_init.lock")
+_DB_INIT_MAX_RETRIES = 3
+_DB_INIT_INITIAL_BACKOFF_SECONDS = 1
 
-def initialize_database(app):
-  with app.app_context():
-    from app.models import user, project, building, floor, pillar, beam, slab  # noqa: F401
+
+class _FileLock:
+  """A tiny best-effort, cross-platform-ish file lock.
+
+  Uses O_CREAT|O_EXCL to atomically create a lock file. This is not a
+  perfect distributed lock (it only helps within a single filesystem,
+  e.g. a single replica/container), but it is enough to stop multiple
+  processes/threads on the same instance from racing to run DDL, and it
+  degrades gracefully (falls through) if it can't acquire the lock.
+  """
+
+  def __init__(self, path, timeout=10, poll_interval=0.2):
+    self.path = path
+    self.timeout = timeout
+    self.poll_interval = poll_interval
+    self._fd = None
+
+  def acquire(self):
+    deadline = time.monotonic() + self.timeout
+    while True:
+      try:
+        self._fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+        return True
+      except FileExistsError:
+        if time.monotonic() >= deadline:
+          return False
+        time.sleep(self.poll_interval)
+      except OSError as exc:
+        if exc.errno != errno.EEXIST:
+          # Filesystem doesn't support the lock (e.g. read-only /tmp).
+          # Fall back to running without a lock rather than failing startup.
+          logger.warning("Unable to use DB init file lock at %s: %s", self.path, exc)
+          return False
+        if time.monotonic() >= deadline:
+          return False
+        time.sleep(self.poll_interval)
+
+  def release(self):
+    if self._fd is not None:
+      try:
+        os.close(self._fd)
+      except OSError:
+        pass
+      self._fd = None
+    try:
+      os.remove(self.path)
+    except OSError:
+      pass
+
+  def __enter__(self):
+    self.acquire()
+    return self
+
+  def __exit__(self, exc_type, exc_val, exc_tb):
+    self.release()
+
+
+def _create_all_with_retry():
+  """Run db.create_all() with exponential backoff on concurrent DDL errors.
+
+  MySQL raises OperationalError (1684) when another connection is
+  concurrently altering the same table's schema. Retrying with backoff
+  gives the other instance time to finish its DDL before we try again.
+  """
+  backoff = _DB_INIT_INITIAL_BACKOFF_SECONDS
+  last_exc = None
+  for attempt in range(1, _DB_INIT_MAX_RETRIES + 1):
     try:
       db.create_all()
+      return True
+    except OperationalError as exc:
+      last_exc = exc
+      logger.warning(
+        "Database schema creation attempt %s/%s failed with a (likely "
+        "concurrent DDL) OperationalError: %s",
+        attempt,
+        _DB_INIT_MAX_RETRIES,
+        exc,
+      )
+      if attempt < _DB_INIT_MAX_RETRIES:
+        time.sleep(backoff)
+        backoff *= 2
+      db.session.rollback()
+
+  logger.error(
+    "Database schema creation failed after %s attempts: %s",
+    _DB_INIT_MAX_RETRIES,
+    last_exc,
+  )
+  return False
+
+
+def initialize_database(app):
+  """Initialize the database schema.
+
+  This is deliberately defensive: if the DDL fails after retries (e.g.
+  another replica is doing the same work at the same time), we log and
+  return rather than raising, so the app still starts and can serve
+  requests. Callers can add their own lazy retry-on-first-request logic
+  if strict "schema must exist" guarantees are required.
+  """
+  with app.app_context():
+    from app.models import user, project, building, floor, pillar, beam, slab  # noqa: F401
+
+    lock = _FileLock(_DB_INIT_LOCK_PATH)
+    acquired = lock.acquire()
+    if not acquired:
+      logger.info(
+        "Could not acquire DB init lock at %s within timeout; proceeding "
+        "without it (schema creation is retried on OperationalError).",
+        _DB_INIT_LOCK_PATH,
+      )
+    try:
+      _create_all_with_retry()
     except Exception as exc:
       # Do not crash the whole process on transient DB startup races.
       logger.exception("Database initialization failed: %s", exc)
+    finally:
+      if acquired:
+        lock.release()
 
 
 def _register_api_blueprints(app, prefix: str, name_suffix: str = ""):
