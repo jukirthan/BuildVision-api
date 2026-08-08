@@ -1,6 +1,9 @@
+import os
+
 from flask import request
 
-from app.services.openai_service import OpenAIServiceError, generate_chat_reply
+from app.services.gemini_service import GeminiServiceError, generate_chat_reply as generate_gemini_reply
+from app.services.openai_service import SYSTEM_PROMPT, OpenAIServiceError, generate_chat_reply
 from app.utils import error_response, success_response
 
 
@@ -28,12 +31,19 @@ class AiController:
     if messages[-1]["role"] != "user":
       return error_response("The latest chat message must come from the user.", 400)
 
+    provider = str(data.get("provider") or os.getenv("AI_PROVIDER", "openai")).strip().lower()
+    if provider not in {"openai", "gemini"}:
+      return error_response("Unsupported AI provider. Choose OpenAI or Gemini.", 400)
+
     try:
-      text = generate_chat_reply(messages)
-    except OpenAIServiceError as exc:
+      if provider == "gemini":
+        text = generate_gemini_reply(messages, system_prompt=SYSTEM_PROMPT)
+      else:
+        text = generate_chat_reply(messages)
+    except (OpenAIServiceError, GeminiServiceError) as exc:
       return error_response(str(exc), 503)
     except Exception:
       # Do not leak provider/network details into the browser.
       return error_response("The AI assistant is temporarily unavailable.", 503)
 
-    return success_response({"text": text}, "AI response ready")
+    return success_response({"text": text, "provider": provider}, "AI response ready")

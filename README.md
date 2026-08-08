@@ -49,6 +49,9 @@ FLASK_APP=run.py
 FLASK_ENV=development
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-4o-mini
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-flash-latest
 SECRET_KEY=your_secret_key
 JWT_SECRET_KEY=your_jwt_secret
 DB_HOST=localhost
@@ -97,7 +100,10 @@ Health check: `GET /api/health`
 The authenticated AI Assistant uses the server-side OpenAI Responses API. Set
 `OPENAI_API_KEY` in Railway/AWS or the local backend environment; never put the
 key in a `NEXT_PUBLIC_*` variable or send it from the browser. `OPENAI_MODEL`
-can override the default `gpt-4o-mini` model.
+can override the default `gpt-4o-mini` model. Gemini is also supported through
+the server-side `generateContent` endpoint. Set `GEMINI_API_KEY` and
+`GEMINI_MODEL=gemini-flash-latest`; set `AI_PROVIDER` to `gemini` to select it
+as the default, or choose a provider from the assistant UI.
 
 ## API Endpoints
 
@@ -111,7 +117,7 @@ can override the default `gpt-4o-mini` model.
 ### AI Assistant
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/ai/chat` | Authenticated OpenAI-backed chat |
+| POST | `/api/ai/chat` | Authenticated OpenAI/Gemini-backed chat; accepts `provider` and `messages` |
 
 ### Projects
 | Method | Endpoint | Description |

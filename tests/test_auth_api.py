@@ -81,7 +81,66 @@ def test_ai_chat_reports_missing_openai_configuration(client, engineer_user, mon
   res = client.post(
     "/api/ai/chat",
     headers=headers,
-    json={"messages": [{"role": "user", "content": "How should I size a footing?"}]},
+    json={
+      "provider": "openai",
+      "messages": [{"role": "user", "content": "How should I size a footing?"}],
+    },
   )
   assert res.status_code == 503
   assert "OPENAI_API_KEY" in res.get_json()["message"]
+
+
+def test_ai_chat_reports_missing_gemini_configuration(client, engineer_user, monkeypatch):
+  from tests.conftest import auth_header
+
+  monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+  headers, _ = auth_header(client, "eng@test.com", "Engineer1")
+  res = client.post(
+    "/api/ai/chat",
+    headers=headers,
+    json={
+      "provider": "gemini",
+      "messages": [{"role": "user", "content": "How should I size a footing?"}],
+    },
+  )
+  assert res.status_code == 503
+  assert "GEMINI_API_KEY" in res.get_json()["message"]
+
+
+def test_ai_chat_uses_selected_gemini_provider(client, engineer_user, monkeypatch):
+  from tests.conftest import auth_header
+
+  monkeypatch.setattr(
+    "app.controllers.ai_controller.generate_gemini_reply",
+    lambda messages, system_prompt: "Gemini test response",
+  )
+  headers, _ = auth_header(client, "eng@test.com", "Engineer1")
+  res = client.post(
+    "/api/ai/chat",
+    headers=headers,
+    json={
+      "provider": "gemini",
+      "messages": [{"role": "user", "content": "Explain a slab."}],
+    },
+  )
+  assert res.status_code == 200
+  assert res.get_json()["data"] == {
+    "text": "Gemini test response",
+    "provider": "gemini",
+  }
+
+
+def test_ai_chat_rejects_unknown_provider(client, engineer_user):
+  from tests.conftest import auth_header
+
+  headers, _ = auth_header(client, "eng@test.com", "Engineer1")
+  res = client.post(
+    "/api/ai/chat",
+    headers=headers,
+    json={
+      "provider": "unknown",
+      "messages": [{"role": "user", "content": "Explain a slab."}],
+    },
+  )
+  assert res.status_code == 400
+  assert "Unsupported AI provider" in res.get_json()["message"]
