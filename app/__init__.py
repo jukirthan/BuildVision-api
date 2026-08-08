@@ -30,6 +30,7 @@ def _register_api_blueprints(app, prefix: str, name_suffix: str = ""):
   from app.routes.beam_routes import beam_bp
   from app.routes.slab_routes import slab_bp
   from app.routes.dashboard_routes import dashboard_bp
+  from app.routes.ai_routes import ai_bp
   from app.routes.recommendation_routes import recommendation_bp
   from app.routes.admin_routes import admin_bp
 
@@ -43,6 +44,7 @@ def _register_api_blueprints(app, prefix: str, name_suffix: str = ""):
     (beam_bp, "beams"),
     (slab_bp, "slabs"),
     (dashboard_bp, "dashboard"),
+    (ai_bp, "ai"),
     (recommendation_bp, "recommendations"),
     (admin_bp, "admin"),
   ]

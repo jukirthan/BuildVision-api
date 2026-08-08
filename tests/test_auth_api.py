@@ -71,3 +71,17 @@ def test_weak_password_rejected(client):
     },
   )
   assert res.status_code == 400
+
+
+def test_ai_chat_reports_missing_openai_configuration(client, engineer_user, monkeypatch):
+  from tests.conftest import auth_header
+
+  monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+  headers, _ = auth_header(client, "eng@test.com", "Engineer1")
+  res = client.post(
+    "/api/ai/chat",
+    headers=headers,
+    json={"messages": [{"role": "user", "content": "How should I size a footing?"}]},
+  )
+  assert res.status_code == 503
+  assert "OPENAI_API_KEY" in res.get_json()["message"]

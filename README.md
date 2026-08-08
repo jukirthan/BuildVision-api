@@ -47,6 +47,8 @@ Copy `.env.example` to `.env` and update your MySQL credentials:
 ```
 FLASK_APP=run.py
 FLASK_ENV=development
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4o-mini
 SECRET_KEY=your_secret_key
 JWT_SECRET_KEY=your_jwt_secret
 DB_HOST=localhost
@@ -92,6 +94,11 @@ Server: `http://127.0.0.1:5000`
 
 Health check: `GET /api/health`
 
+The authenticated AI Assistant uses the server-side OpenAI Responses API. Set
+`OPENAI_API_KEY` in Railway/AWS or the local backend environment; never put the
+key in a `NEXT_PUBLIC_*` variable or send it from the browser. `OPENAI_MODEL`
+can override the default `gpt-4o-mini` model.
+
 ## API Endpoints
 
 ### Authentication
@@ -100,6 +107,11 @@ Health check: `GET /api/health`
 | POST | `/api/auth/register` | Register user |
 | POST | `/api/auth/login` | Login |
 | POST | `/api/auth/refresh` | Refresh token |
+
+### AI Assistant
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/ai/chat` | Authenticated OpenAI-backed chat |
 
 ### Projects
 | Method | Endpoint | Description |
