@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 
 from flask import Flask
 from app.config import config_by_name
@@ -7,6 +8,8 @@ from app.extensions import db, migrate, jwt, cors
 from app.http import register_error_handlers, register_security_headers
 
 logger = logging.getLogger(__name__)
+
+_db_init_lock = threading.Lock()
 
 
 def initialize_database(app):
@@ -85,7 +88,13 @@ def create_app(config_name=None):
   from app.models import user, project, building, floor, pillar, beam, slab  # noqa: F401
 
   if not app.config.get("TESTING"):
-    initialize_database(app)
+    @app.before_request
+    def _lazy_db_init():
+      if not app.config.get("_DB_INITIALIZED"):
+        with _db_init_lock:
+          if not app.config.get("_DB_INITIALIZED"):
+            initialize_database(app)
+            app.config["_DB_INITIALIZED"] = True
 
   _register_api_blueprints(app, "/api")
   _register_api_blueprints(app, "/api/v1", name_suffix="_v1")
